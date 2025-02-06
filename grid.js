@@ -1,8 +1,9 @@
 // Define object types with their properties
 const ObjectTypes = {
-    TREE: { type: 'tree', width: 2, height: 2, emoji: '🌳', interactive: true, collidable: true },
-    ROCK: { type: 'rock', width: 1, height: 1, emoji: '🪨', interactive: true, collidable: true },
+    TREE: { type: 'tree', width: 2, height: 2, emoji: '🌳', interactive: true, collidable: true, resourceType: 'wood', resourceAmount: 15 },
+    ROCK: { type: 'rock', width: 1, height: 1, emoji: '🪨', interactive: true, collidable: true, resourceType: 'stone', resourceAmount: 15 },
     HOUSE: { type: 'house', width: 4, height: 4, emoji: '🏠', interactive: true, collidable: true },
+    BASECAMP: { type: 'basecamp', width: 3, height: 3, emoji: '🏕️', interactive: true, collidable: true, storage: {} },
     BUSH: { type: 'bush', width: 1, height: 1, emoji: '🌿', interactive: false, collidable: false },
     MOUNTAIN: { type: 'mountain', width: 4, height: 4, emoji: '⛰️', interactive: false, collidable: true },
     SMALL_MOUNTAIN: { type: 'small_mountain', width: 2, height: 2, emoji: '⛰️', interactive: false, collidable: true },
@@ -100,6 +101,7 @@ class Grid {
         this.lastPoopTime = 0;
         this.generateBiomes();
         this.generateMountains();
+        this.placeObject(10, 10, ObjectTypes.BASECAMP);
     }
 
     generateBiomes() {

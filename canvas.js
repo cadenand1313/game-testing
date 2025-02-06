@@ -12,10 +12,24 @@ const gameState = {
         x: 100,
         y: 100,
         emoji: '🧍',
-        speed: 2
+        speed: 2,
+        inventory: {
+            wood: 0,
+            stone: 0
+        },
+        gatheringProgress: 0,
+        isGathering: false,
+        gatheringStartTime: 0,
+        gatheredFromNode: 0
     },
     tileSize: 20,
-    lastFrameTime: Date.now()
+    lastFrameTime: Date.now(),
+    message: '',
+    messageTime: 0,
+    gatheredAmount: 0,
+    totalGatheredResources: 0,
+    gatheredPosition: { x: 0, y: 0 },
+    messageOpacity: 1
 };
 
 // Biome colors and textures
@@ -248,6 +262,29 @@ function render() {
     renderPoops();
     renderClouds();
     renderPlayer();
+
+    // Display message
+    if (gameState.message && Date.now() - gameState.messageTime < 3000) {
+        let messageAge = Date.now() - gameState.messageTime;
+        let opacity = 1 - messageAge / 1500; // Fade out over 1.5 seconds
+        opacity = Math.max(0, opacity); // Ensure opacity is not negative
+        gameState.messageOpacity = opacity;
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${gameState.messageOpacity})`;
+        ctx.font = `20px ${defaultFont}`;
+        ctx.textAlign = 'center';
+        let floatingOffset = -messageAge / 50; // Adjust position for floating effect
+        ctx.fillText(gameState.message, canvas.width / 2, 50 + floatingOffset);
+    }
+
+    // Display gathering progress bar
+    if (gameState.isGathering) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(canvas.width / 2 - 50, 80, 100, 10);
+        ctx.fillStyle = 'green';
+        ctx.fillRect(canvas.width / 2 - 50, 80, gameState.gatheringProgress * 100, 10);
+    }
+
     requestAnimationFrame(render);
 }
 
@@ -256,9 +293,90 @@ const keys = new Set();
 window.addEventListener('keydown', e => keys.add(e.key));
 window.addEventListener('keyup', e => keys.delete(e.key));
 
+// Check if the player is close enough to an object
+function isNearby(playerX, playerY, objectX, objectY, range) {
+    const playerGridX = Math.floor(playerX);
+    const playerGridY = Math.floor(playerY);
+    const objectGridX = Math.floor(objectX);
+    const objectGridY = Math.floor(objectY);
+    const distance = Math.sqrt(Math.pow(playerGridX - objectGridX, 2) + Math.pow(playerGridY - objectGridY, 2));
+    return distance <= 3;
+}
+
+// Gather resource from a node
+function gatherResource(deltaTime) {
+    const playerX = gameState.player.x;
+    const playerY = gameState.player.y;
+    const gridX = Math.floor(playerX);
+    const gridY = Math.floor(playerY);
+
+    // Check for objects in a wider area around the player
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            const checkX = gridX + dx;
+            const checkY = gridY + dy;
+
+            if (checkX >= 0 && checkX < gameGrid.width && checkY >= 0 && checkY < gameGrid.height) {
+                if (gameGrid.tiles[checkY][checkX].objectId) {
+                    const objectId = gameGrid.tiles[checkY][checkX].objectId;
+                    const object = gameGrid.objects.get(objectId);
+
+                    // Check if the object is a tree or a rock
+                    if (object && (object.type === 'tree' || object.type === 'rock')) {
+                        // Check if the player is close enough to the object
+                        if (isNearby(playerX, playerY, object.x, object.y, 1)) {
+                            // Check if the object has any resources left
+                            if (object.resourceAmount > 0) {
+                                
+                                // Update gathering progress
+                                if (gameState.isGathering) {
+                                    gameState.gatheringProgress += deltaTime / 2000; // 2 seconds gathering time
+                                    gameState.gatheringProgress = Math.min(1, gameState.gatheringProgress);
+                                }
+
+                                if (gameState.gatheringProgress >= 1) {
+                                    // Gather the resource
+                                    const resourceAmount = 1;
+                                    const actualResource = Math.min(resourceAmount, object.resourceAmount);
+                                    object.resourceAmount -= actualResource;
+                                    gameState.player.inventory[object.resourceType] += actualResource;
+
+                                    // Display a message
+                                    gameState.totalGatheredResources += actualResource;
+                                    gameState.message = `Gathered ${gameState.totalGatheredResources} 🪵`;
+                                    gameState.messageTime = Date.now();
+                                    gameState.messageTime = Date.now();
+
+                                    // If the object is depleted, remove it
+                                    if (object.resourceAmount <= 0) {
+                                        gameGrid.removeObject(objectId);
+                                    }
+                                    gameState.isGathering = false;
+                                    gameState.gatheringProgress = 0;
+                                }
+                            } else {
+                                gameState.message = 'This resource node is depleted.';
+                                gameState.messageTime = Date.now();
+                                gameState.isGathering = false;
+                                gameState.gatheringProgress = 0;
+                                gameState.gatheredFromNode = 0;
+                            }
+                        } else {
+                            gameState.message = 'You are not close enough to the resource node.';
+                            gameState.messageTime = Date.now();
+                            gameState.isGathering = false;
+                            gameState.gatheringProgress = 0;
+                            gameState.gatheredFromNode = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 // Check if a move is valid
 function canMove(newX, newY) {
-    return !gameGrid.isPositionBlocked(newX, newY);
+    return !gameState.isGathering && !gameGrid.isPositionBlocked(newX, newY);
 }
 
 // Update game state
@@ -302,10 +420,77 @@ function update() {
     gameState.camera.y = Math.round(gameState.player.y * gameState.tileSize - canvas.height/2);
 
     // Keep camera within bounds
-    gameState.camera.x = Math.max(0, Math.min(gameState.camera.x, 
+    gameState.camera.x = Math.max(0, Math.min(gameState.camera.x,
         gameGrid.width * gameState.tileSize - canvas.width));
-    gameState.camera.y = Math.max(0, Math.min(gameState.camera.y, 
+    gameState.camera.y = Math.max(0, Math.min(gameState.camera.y,
         gameGrid.height * gameState.tileSize - canvas.height));
+
+    // Check if the player is gathering
+    if (keys.has('e')) {
+        if (!gameState.isGathering) {
+            gameState.isGathering = true;
+            gameState.gatheringStartTime = Date.now();
+            gameState.gatheringProgress = 0;
+            gameState.gatheredFromNode = 0;
+        }
+    } else {
+        gameState.isGathering = false;
+        gameState.gatheringProgress = 0;
+        gameState.totalGatheredResources = 0;
+    }
+
+    if (gameState.isGathering) {
+        gatherResource(deltaTime);
+    }
+}
+
+window.addEventListener('keyup', e => {
+    keys.delete(e.key);
+    if (e.key === 'e') {
+        depositResources();
+    }
+});
+
+// Deposit resources at the basecamp
+function depositResources() {
+    const playerX = gameState.player.x;
+    const playerY = gameState.player.y;
+    const gridX = Math.floor(playerX);
+    const gridY = Math.floor(playerY);
+
+    // Check if there is an object at the player's position
+    if (gameGrid.tiles[gridY][gridX].objectId) {
+        const objectId = gameGrid.tiles[gridY][gridX].objectId;
+        const object = gameGrid.objects.get(objectId);
+
+        // Check if the object is a basecamp
+        if (object && object.type === 'basecamp') {
+            // Check if the player is close enough to the basecamp
+            if (isNearby(playerX, playerY, object.x, object.y, 2)) {
+                // Deposit the resources
+                for (const resourceType in gameState.player.inventory) {
+                    const resourceAmount = gameState.player.inventory[resourceType];
+                    if (resourceAmount > 0) {
+                        // Add the resources to the basecamp's storage
+                        if (!object.storage[resourceType]) {
+                            object.storage[resourceType] = 0;
+                        }
+                        object.storage[resourceType] += resourceAmount;
+
+                        // Reset the player's inventory
+                        gameState.player.inventory[resourceType] = 0;
+
+                        // Display a message
+                        gameState.message = `Deposited ${resourceAmount} ${resourceType} at the basecamp.`;
+                        gameState.messageTime = Date.now();
+                    }
+                }
+            } else {
+                gameState.message = 'You are not close enough to the basecamp.';
+                gameState.messageTime = Date.now();
+            }
+        }
+    }
 }
 
 // Game loop
