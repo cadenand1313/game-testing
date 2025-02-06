@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Game</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+    <style>
+        @font-face {
+            font-family: 'NotoEmoji';
+            src: url('https://raw.githubusercontent.com/googlefonts/noto-emoji/main/fonts/NotoColorEmoji.ttf') format('truetype');
+        }
+        canvas {
+            font-family: 'Noto Color Emoji', 'NotoEmoji', sans-serif;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div style="opacity: 0; position: absolute; pointer-events: none;">🧍🌳🪨🏠🌿⛰️🌴🌵🌾🌺🍂🌧️☁️⛈️💩</div>
+    <script src="grid.js"></script>
+    <script src="canvas.js"></script>
+</body>
+</html>
